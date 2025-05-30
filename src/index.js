@@ -296,6 +296,86 @@ window.buildEstimateTable = function(start, end) {
 };
 
 
+window.downloadExcel = async function () {
+  const data = window.estimateProjectData || [];
+  if (!data.length) return;
+
+  // Group data by projectManager
+  const grouped = {};
+  data.forEach(entry => {
+    const manager = entry.projectManager || 'Unassigned';
+    if (!grouped[manager]) grouped[manager] = [];
+    grouped[manager].push(entry);
+  });
+
+  // Prepare grouped exportData with section headers
+  const exportData = [];
+
+  for (const manager in grouped) {
+    // Add a row as a section title for each manager
+    exportData.push({ "Contact": `${manager}` }); // Only first column will be filled for section titles
+
+    // Add the actual project rows
+    grouped[manager].forEach(entry => {
+      exportData.push({
+        "Contact": entry.company || entry.contact || '',
+        "Estimate Date": entry.estimateDate || '',
+        "Approved Date": entry.approvedDate || '',
+        "Scheduled Date": entry.ScheduledDate || '',
+        "Amount": entry.amount != null ? `$${entry.amount.toFixed(2)}` : '',
+        "Completed": entry.completed || '',
+        "Marketing": entry.marketing || entry.companyReferral || ''
+      });
+    });
+
+    // Optional: Add an empty row between managers for visual separation
+    exportData.push({});
+  }
+
+  // Create worksheet and workbook
+  const ws = XLSX.utils.json_to_sheet(exportData, { skipHeader: false });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Estimate Projects");
+
+  // Write the workbook to a binary array
+  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+
+  // Convert the binary array to a base64 string
+  const base64File = btoa(String.fromCharCode.apply(null, new Uint8Array(wbout)));
+
+  const chunkSize = 10000;
+  const totalChunks = Math.ceil(base64File.length / chunkSize);
+  const build = { mode: "exportXLSX" };
+  let chunkIndex = 0;
+
+  async function sendChunk() {
+    if (chunkIndex >= totalChunks) return;
+    const start = chunkIndex * chunkSize;
+    const end = start + chunkSize;
+    const chunk = base64File.slice(start, end);
+    build.base64 = chunk;
+    build.stop = (chunkIndex === totalChunks - 1);
+    await new Promise((resolve, reject) => {
+      try {
+        FileMaker.PerformScriptWithOption("Manage: Hybrid Estimate/Project Report", JSON.stringify(build), 0);
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    });
+    chunkIndex++;
+  }
+
+  async function processChunks() {
+    while (chunkIndex < totalChunks) {
+      await sendChunk();
+    }
+  }
+
+  await processChunks();
+};
+
+
 
 
 
