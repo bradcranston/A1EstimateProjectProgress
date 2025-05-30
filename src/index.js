@@ -13,6 +13,7 @@ window.processEstimateData = function (json) {
     const projectId = item.Project_ID || null;
     const marketing = item.EstimateContact?.[0]?.Referral || null;
     const contact = item.EstimateContact?.[0]?.NameFull_FirstLast || null;
+    const estimateScheduled = item.Scheduled || null;
 
     const company = item.EstimateCompany?.[0]?.CompanyName || null;
     const companyReferral = item.EstimateCompany?.[0]?.Referral || null;
@@ -26,6 +27,7 @@ window.processEstimateData = function (json) {
     
 
     const entry = {
+      estimateScheduled,
       estimateId,
       estimateDate,
       projectManager,
@@ -76,6 +78,7 @@ window.processProjectData = function (json) {
     const projectManager = estimate?.A1Estmator || null;
     const estimateId = estimate?._ID || null;
     const projectId = estimate?.Project_ID || null;
+    const estimateScheduled = estimate?.Scheduled || null;
 
     const company = project.ProjectCompany?.[0]?.CompanyName || null;
     const companyReferral = project.ProjectCompany?.[0]?.Referral || null;
@@ -92,6 +95,7 @@ window.processProjectData = function (json) {
       resultMap[projectId] = {
         ...existing,
         amount: amount ?? existing.amount,
+        estimateScheduled: estimateScheduled ?? existing.estimateScheduled,
         approvedDate: approvedDate ?? existing.approvedDate,
         completed: completed ?? existing.completed,
         ScheduledDate: ScheduledDate ?? existing.ScheduledDate,
@@ -106,6 +110,7 @@ window.processProjectData = function (json) {
       };
     } else {
       resultMap[projectId] = {
+        estimateScheduled,
         amount,
         approvedDate,
         ScheduledDate,
@@ -131,6 +136,73 @@ window.processProjectData = function (json) {
   return window.estimateProjectData;
 };
 
+window.processEventData = function (json) {
+
+  const eventData = JSON.parse(json);
+
+  const foremanMap = {
+    "John": "John Argiro",
+    "AndyS": "Andy Stepan",
+    "Christian": "Christian Wrabley",
+    "Ryan": "Ryan Perkins",
+    "Ryan P": "Ryan Perkins"
+  };
+
+  eventData.value.forEach(event => {
+    const {
+      DateStart,
+      _id_Company,
+      _id_Contact,
+      Estimate_ID,
+      _id_Project,
+      Contacts,
+      Foreman
+    } = event;
+
+    // Ignore if all identifying fields are missing
+    if (!_id_Company && !_id_Contact && !_id_Project) return;
+
+    // Case 1: Add "Estimate Scheduled" if Estimate_ID matches
+// Case 1: Add estimateScheduled if Estimate_ID matches
+if (Estimate_ID) {
+  const match = window.estimateProjectData.find(row => row.estimateId === Estimate_ID);
+  if (match) {
+    match.estimateScheduled = DateStart;
+
+    // Reorder estimateScheduled before estimateDate if both exist
+    if (match.estimateDate) {
+      const reordered = {};
+      for (const key in match) {
+        if (key === "estimateDate" && match.estimateScheduled) {
+          reordered.estimateScheduled = match.estimateScheduled;
+        }
+        reordered[key] = match[key];
+      }
+      Object.assign(match, reordered);
+    }
+  }
+  return;
+}
+
+    // Case 2: No _id_Project and no Estimate_ID => add a new row
+    if (!_id_Project && !Estimate_ID) {
+      const contactName = Contacts?.[0]?.NameFull_FirstLast || '';
+      const referral = Contacts?.[0]?.Referral || '';
+      const foremanFull = foremanMap[Foreman?.trim()] || '';
+
+      window.estimateProjectData.push({
+        contact: contactName,
+        referral: referral,
+        projectManager: foremanFull,
+        estimateScheduled: DateStart
+        // Additional fields can be added as needed
+      });
+    }
+  });
+}
+
+
+
 window.buildEstimateTable = function(start, end) {
   const data = window.estimateProjectData || [];
   if (!data.length) return;
@@ -152,7 +224,7 @@ window.buildEstimateTable = function(start, end) {
   const headerStyle = 'background:#f0f0f0;font-weight:bold;text-align:left;padding:6px;border-bottom:1px solid #ccc;';
   const cellStyle = 'padding:6px;border-bottom:1px solid #eee;';
   const rightAlign = 'text-align:right;';
-  const columns = ['Contact', 'Estimate Date', 'Approved Date','Scheduled Date', 'Amount', 'Completed', 'Marketing'];
+  const columns = ['Contact', 'Estimate Scheduled','Estimate Date', 'Approved Date','Scheduled Date', 'Amount', 'Completed', 'Marketing'];
   const buttonColumns = ['View Estimate', 'View Project'];
 
   function isWithinRange(dateStr) {
@@ -230,6 +302,11 @@ window.buildEstimateTable = function(start, end) {
       contactCell.style = cellStyle;
       row.appendChild(contactCell);
 
+      const estimateschCell = document.createElement('td');
+      estimateschCell.textContent = formatDate(entry.estimateScheduled);
+      estimateschCell.style = `${cellStyle} ${rightAlign} ${isWithinRange(entry.estimateScheduled) ? 'background-color:#d4edda;' : ''}`;
+      row.appendChild(estimateschCell);
+
       const estimateCell = document.createElement('td');
       estimateCell.textContent = formatDate(entry.estimateDate);
       estimateCell.style = `${cellStyle} ${rightAlign} ${isWithinRange(entry.estimateDate) ? 'background-color:#d4edda;' : ''}`;
@@ -264,6 +341,7 @@ window.buildEstimateTable = function(start, end) {
       // View Estimate Button
       const estimateBtnCell = document.createElement('td');
       estimateBtnCell.style = cellStyle;
+      if (entry.estimateId) {
       const estimateBtn = document.createElement('button');
       estimateBtn.textContent = 'View Estimate';
       estimateBtn.onclick = () => {
@@ -273,6 +351,7 @@ window.buildEstimateTable = function(start, end) {
       };
       estimateBtnCell.appendChild(estimateBtn);
       row.appendChild(estimateBtnCell);
+    }
 
       // View Project Button (conditionally added)
       const projectBtnCell = document.createElement('td');
