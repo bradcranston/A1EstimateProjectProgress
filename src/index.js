@@ -398,6 +398,7 @@ window.downloadExcel = async function () {
     grouped[manager].forEach(entry => {
       exportData.push({
         "Contact": entry.company || entry.contact || '',
+        "Estimate Scheduled": entry.estimateScheduled || '',
         "Estimate Date": entry.estimateDate || '',
         "Approved Date": entry.approvedDate || '',
         "Scheduled Date": entry.ScheduledDate || '',
