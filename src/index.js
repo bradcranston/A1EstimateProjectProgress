@@ -14,6 +14,7 @@ window.processEstimateData = function (json) {
     const marketing = item.EstimateContact?.[0]?.Referral || null;
     const contact = item.EstimateContact?.[0]?.NameFull_FirstLast || null;
     const estimateScheduled = item.Scheduled || null;
+    const callDate = item.CallDate || null;
 
     const company = item.EstimateCompany?.[0]?.CompanyName || null;
     const companyReferral = item.EstimateCompany?.[0]?.Referral || null;
@@ -39,7 +40,8 @@ window.processEstimateData = function (json) {
       amount,
       approvedDate,
       completed,
-      ScheduledDate
+      ScheduledDate,
+      callDate
     };
 
     result.push(entry);
@@ -79,6 +81,7 @@ window.processProjectData = function (json) {
     const estimateId = estimate?._ID || null;
     const projectId = estimate?.Project_ID || null;
     const estimateScheduled = estimate?.Scheduled || null;
+    const callDate = estimate?.CallDate || null;
 
     const company = project.ProjectCompany?.[0]?.CompanyName || null;
     const companyReferral = project.ProjectCompany?.[0]?.Referral || null;
@@ -106,6 +109,7 @@ window.processProjectData = function (json) {
         contact: existing.contact || contact,
         marketing: existing.marketing || marketing,
         estimateId: existing.estimateId || estimateId,
+        callDate: existing.callDate || callDate,
         projectId: existing.projectId || estprojectIdimateId
       };
     } else {
@@ -123,6 +127,7 @@ window.processProjectData = function (json) {
         contact,
         projectId,
         projectManager,
+        callDate
       };
     }
   });
@@ -151,6 +156,7 @@ window.processEventData = function (json) {
   eventData.value.forEach(event => {
     const {
       DateStart,
+      CallDate,
       _id_Company,
       _id_Contact,
       Estimate_ID,
@@ -160,31 +166,47 @@ window.processEventData = function (json) {
     } = event;
 
     // Ignore if all identifying fields are missing
-    if (!_id_Company && !_id_Contact && !_id_Project) return;
+    if (!_id_Company && !_id_Contact && !_id_Project && !Estimate_ID) return;
 
-    // Case 1: Add "Estimate Scheduled" if Estimate_ID matches
-// Case 1: Add estimateScheduled if Estimate_ID matches
-if (Estimate_ID) {
-  const match = window.estimateProjectData.find(row => row.estimateId === Estimate_ID);
-  if (match) {
-    match.estimateScheduled = DateStart;
-
-    // Reorder estimateScheduled before estimateDate if both exist
-    if (match.estimateDate) {
-      const reordered = {};
-      for (const key in match) {
-        if (key === "estimateDate" && match.estimateScheduled) {
-          reordered.estimateScheduled = match.estimateScheduled;
+    // Case 1: Match by Estimate_ID
+    if (Estimate_ID) {
+      const match = window.estimateProjectData.find(row => row.estimateId === Estimate_ID);
+      if (match) {
+        match.estimateScheduled = DateStart;
+        // Only update callDate if CallDate is provided and not already set
+        if (CallDate && !match.callDate) {
+          match.callDate = CallDate;
         }
-        reordered[key] = match[key];
-      }
-      Object.assign(match, reordered);
-    }
-  }
-  return;
-}
 
-    // Case 2: No _id_Project and no Estimate_ID => add a new row
+        // Reorder estimateScheduled before estimateDate if both exist
+        if (match.estimateDate) {
+          const reordered = {};
+          for (const key in match) {
+            if (key === "estimateDate" && match.estimateScheduled) {
+              reordered.estimateScheduled = match.estimateScheduled;
+            }
+            reordered[key] = match[key];
+          }
+          Object.assign(match, reordered);
+        }
+      }
+      return;
+    }
+
+    // Case 2: Match by Project ID
+    if (_id_Project) {
+      const match = window.estimateProjectData.find(row => row.projectId === _id_Project);
+      if (match) {
+        match.estimateScheduled = DateStart;
+        // Only update callDate if CallDate is provided and not already set
+        if (CallDate && !match.callDate) {
+          match.callDate = CallDate;
+        }
+      }
+      return;
+    }
+
+    // Case 3: No _id_Project and no Estimate_ID => add a new row
     if (!_id_Project && !Estimate_ID) {
       const contactName = Contacts?.[0]?.NameFull_FirstLast || '';
       const referral = Contacts?.[0]?.Referral || '';
@@ -194,7 +216,8 @@ if (Estimate_ID) {
         contact: contactName,
         referral: referral,
         projectManager: foremanFull,
-        estimateScheduled: DateStart
+        estimateScheduled: DateStart,
+        callDate: CallDate || null
         // Additional fields can be added as needed
       });
     }
@@ -224,7 +247,7 @@ window.buildEstimateTable = function(start, end) {
   const headerStyle = 'background:#f0f0f0;font-weight:bold;text-align:left;padding:6px;border-bottom:1px solid #ccc;';
   const cellStyle = 'padding:6px;border-bottom:1px solid #eee;';
   const rightAlign = 'text-align:right;';
-  const columns = ['Contact', 'Estimate Scheduled','Estimate Date', 'Approved Date','Scheduled Date', 'Amount', 'Completed', 'Marketing'];
+  const columns = ['Contact', 'Called', 'Estimate Scheduled','Estimate Date', 'Approved Date','Scheduled Date', 'Amount', 'Completed', 'Marketing'];
   const buttonColumns = ['View Estimate', 'View Project'];
 
   function isWithinRange(dateStr) {
@@ -301,6 +324,11 @@ window.buildEstimateTable = function(start, end) {
       contactCell.textContent = entry.company || entry.contact || '';
       contactCell.style = cellStyle;
       row.appendChild(contactCell);
+
+      const calledCell = document.createElement('td');
+      calledCell.textContent = formatDate(entry.callDate);
+      calledCell.style = `${cellStyle} ${rightAlign} ${isWithinRange(entry.callDate) ? 'background-color:#d4edda;' : ''}`;
+      row.appendChild(calledCell);
 
       const estimateschCell = document.createElement('td');
       estimateschCell.textContent = formatDate(entry.estimateScheduled);
@@ -398,6 +426,7 @@ window.downloadExcel = async function () {
     grouped[manager].forEach(entry => {
       exportData.push({
         "Contact": entry.company || entry.contact || '',
+        "Called": entry.callDate || '',
         "Estimate Scheduled": entry.estimateScheduled || '',
         "Estimate Date": entry.estimateDate || '',
         "Approved Date": entry.approvedDate || '',
