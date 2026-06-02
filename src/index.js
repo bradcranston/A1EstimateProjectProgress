@@ -12,12 +12,16 @@ window.processEstimateData = function (json) {
     const projectManager = item.A1Estmator || null;
     const projectId = item.Project_ID || null;
     const marketing = item.EstimateContact?.[0]?.Referral || null;
+    const marketingEmail = item.EstimateContact?.[0]?.marketingEmail || item.EstimateCompany?.[0]?.marketingEmail || null;
     const contact = item.EstimateContact?.[0]?.NameFull_FirstLast || null;
     const estimateScheduled = item.Scheduled || null;
     const callDate = item.CallDate || null;
 
     const company = item.EstimateCompany?.[0]?.CompanyName || null;
     const companyReferral = item.EstimateCompany?.[0]?.Referral || null;
+
+    const postalCode = item.PostalCode || item.EstimateContact?.[0]?.PostalCode || item.EstimateCompany?.[0]?.PostalCode || null;
+    const state = item.State || item.EstimateContact?.[0]?.State || item.EstimateCompany?.[0]?.State || null;
 
     const estimateProject = item.EstimateProject?.[0];
     const amount = estimateProject?.ApprovedPrice ?? null;
@@ -33,6 +37,7 @@ window.processEstimateData = function (json) {
       estimateDate,
       projectManager,
       marketing,
+      marketingEmail,
       contact,
       company,
       companyReferral,
@@ -41,7 +46,9 @@ window.processEstimateData = function (json) {
       approvedDate,
       completed,
       ScheduledDate,
-      callDate
+      callDate,
+      postalCode,
+      state
     };
 
     result.push(entry);
@@ -86,8 +93,11 @@ window.processProjectData = function (json) {
     const company = project.ProjectCompany?.[0]?.CompanyName || null;
     const companyReferral = project.ProjectCompany?.[0]?.Referral || null;
 
+    const postalCode = project.PostalCode || project.ProjectContact?.[0]?.PostalCode || project.ProjectCompany?.[0]?.PostalCode || null;
+    const state = project.State || project.ProjectContact?.[0]?.State || project.ProjectCompany?.[0]?.State || null;
 
     const marketing = project.ProjectContact?.[0]?.Referral || null;
+    const marketingEmail = project.ProjectContact?.[0]?.marketingEmail || project.ProjectCompany?.[0]?.marketingEmail || null;
     const contact = project.ProjectContact?.[0]?.NameFull_FirstLast || null;
   
 
@@ -108,9 +118,12 @@ window.processProjectData = function (json) {
         companyReferral: existing.companyReferral || companyReferral,
         contact: existing.contact || contact,
         marketing: existing.marketing || marketing,
+        marketingEmail: existing.marketingEmail || marketingEmail,
         estimateId: existing.estimateId || estimateId,
         callDate: existing.callDate || callDate,
-        projectId: existing.projectId || estprojectIdimateId
+        projectId: existing.projectId || estprojectIdimateId,
+        postalCode: existing.postalCode ?? postalCode,
+        state: existing.state ?? state
       };
     } else {
       resultMap[projectId] = {
@@ -124,10 +137,13 @@ window.processProjectData = function (json) {
         company,
         companyReferral,
         marketing,
+        marketingEmail,
         contact,
         projectId,
         projectManager,
-        callDate
+        callDate,
+        postalCode,
+        state
       };
     }
   });
@@ -162,7 +178,10 @@ window.processEventData = function (json) {
       Estimate_ID,
       _id_Project,
       Contacts,
-      Foreman
+      Foreman,
+      PostalCode,
+      State,
+      f_canthelp
     } = event;
 
     // Ignore if all identifying fields are missing
@@ -177,6 +196,9 @@ window.processEventData = function (json) {
         if (CallDate && !match.callDate) {
           match.callDate = CallDate;
         }
+        if (PostalCode && !match.postalCode) match.postalCode = PostalCode;
+        if (State && !match.state) match.state = State;
+        if (f_canthelp) match.f_canthelp = f_canthelp;
 
         // Reorder estimateScheduled before estimateDate if both exist
         if (match.estimateDate) {
@@ -202,6 +224,9 @@ window.processEventData = function (json) {
         if (CallDate && !match.callDate) {
           match.callDate = CallDate;
         }
+        if (PostalCode && !match.postalCode) match.postalCode = PostalCode;
+        if (State && !match.state) match.state = State;
+        if (f_canthelp) match.f_canthelp = f_canthelp;
       }
       return;
     }
@@ -214,11 +239,13 @@ window.processEventData = function (json) {
 
       window.estimateProjectData.push({
         contact: contactName,
-        referral: referral,
+        marketing: referral,
         projectManager: foremanFull,
         estimateScheduled: DateStart,
-        callDate: CallDate || null
-        // Additional fields can be added as needed
+        callDate: CallDate || null,
+        postalCode: PostalCode || null,
+        state: State || null,
+        f_canthelp: f_canthelp || false
       });
     }
   });
@@ -247,7 +274,7 @@ window.buildEstimateTable = function(start, end) {
   const headerStyle = 'background:#f0f0f0;font-weight:bold;text-align:left;padding:6px;border-bottom:1px solid #ccc;';
   const cellStyle = 'padding:6px;border-bottom:1px solid #eee;';
   const rightAlign = 'text-align:right;';
-  const columns = ['Contact', 'Called', 'Estimate Scheduled','Estimate Date', 'Approved Date','Scheduled Date', 'Amount', 'Completed', 'Marketing'];
+  const columns = ['Contact', 'State', 'Postal Code', 'Called', 'Estimate Scheduled','Estimate Date', 'Approved Date','Scheduled Date', 'Amount', 'Completed', 'Marketing', 'Marketing Email'];
   const buttonColumns = ['View Estimate', 'View Project'];
 
   function isWithinRange(dateStr) {
@@ -319,11 +346,26 @@ window.buildEstimateTable = function(start, end) {
     grouped[manager].forEach(entry => {
       const row = document.createElement('tr');
 
+      // Highlight row red if f_canthelp is true
+      if (entry.f_canthelp) {
+        row.style.backgroundColor = '#ffcccc';
+      }
+
       // Data cells
       const contactCell = document.createElement('td');
       contactCell.textContent = entry.company || entry.contact || '';
       contactCell.style = cellStyle;
       row.appendChild(contactCell);
+
+      const stateCell = document.createElement('td');
+      stateCell.textContent = entry.state || '';
+      stateCell.style = cellStyle;
+      row.appendChild(stateCell);
+
+      const postalCodeCell = document.createElement('td');
+      postalCodeCell.textContent = entry.postalCode || '';
+      postalCodeCell.style = cellStyle;
+      row.appendChild(postalCodeCell);
 
       const calledCell = document.createElement('td');
       calledCell.textContent = formatDate(entry.callDate);
@@ -365,6 +407,11 @@ window.buildEstimateTable = function(start, end) {
       marketingCell.textContent = entry.marketing || entry.companyReferral || '';
       marketingCell.style = cellStyle;
       row.appendChild(marketingCell);
+
+      const marketingEmailCell = document.createElement('td');
+      marketingEmailCell.textContent = entry.marketingEmail || '';
+      marketingEmailCell.style = cellStyle;
+      row.appendChild(marketingEmailCell);
 
       // View Estimate Button
       const estimateBtnCell = document.createElement('td');
@@ -426,6 +473,8 @@ window.downloadExcel = async function () {
     grouped[manager].forEach(entry => {
       exportData.push({
         "Contact": entry.company || entry.contact || '',
+        "State": entry.state || '',
+        "Postal Code": entry.postalCode || '',
         "Called": entry.callDate || '',
         "Estimate Scheduled": entry.estimateScheduled || '',
         "Estimate Date": entry.estimateDate || '',
@@ -433,7 +482,8 @@ window.downloadExcel = async function () {
         "Scheduled Date": entry.ScheduledDate || '',
         "Amount": entry.amount != null ? `$${entry.amount.toFixed(2)}` : '',
         "Completed": entry.completed || '',
-        "Marketing": entry.marketing || entry.companyReferral || ''
+        "Marketing": entry.marketing || entry.companyReferral || '',
+        "Marketing Email": entry.marketingEmail || ''
       });
     });
 
