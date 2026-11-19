@@ -181,7 +181,8 @@ window.processEventData = function (json) {
       Foreman,
       PostalCode,
       State,
-      f_canthelp
+      f_canthelp,
+      cantHelpNote
     } = event;
 
     // Ignore if all identifying fields are missing
@@ -199,6 +200,7 @@ window.processEventData = function (json) {
         if (PostalCode && !match.postalCode) match.postalCode = PostalCode;
         if (State && !match.state) match.state = State;
         if (f_canthelp) match.f_canthelp = f_canthelp;
+        if (cantHelpNote) match.cantHelpNote = cantHelpNote;
 
         // Reorder estimateScheduled before estimateDate if both exist
         if (match.estimateDate) {
@@ -227,6 +229,7 @@ window.processEventData = function (json) {
         if (PostalCode && !match.postalCode) match.postalCode = PostalCode;
         if (State && !match.state) match.state = State;
         if (f_canthelp) match.f_canthelp = f_canthelp;
+        if (cantHelpNote) match.cantHelpNote = cantHelpNote;
       }
       return;
     }
@@ -245,7 +248,8 @@ window.processEventData = function (json) {
         callDate: CallDate || null,
         postalCode: PostalCode || null,
         state: State || null,
-        f_canthelp: f_canthelp || false
+        f_canthelp: f_canthelp || false,
+        cantHelpNote: cantHelpNote || null
       });
     }
   });
@@ -274,7 +278,7 @@ window.buildEstimateTable = function(start, end) {
   const headerStyle = 'background:#f0f0f0;font-weight:bold;text-align:left;padding:6px;border-bottom:1px solid #ccc;';
   const cellStyle = 'padding:6px;border-bottom:1px solid #eee;';
   const rightAlign = 'text-align:right;';
-  const columns = ['Contact', 'State', 'Postal Code', 'Called', 'Estimate Scheduled','Estimate Date', 'Approved Date','Scheduled Date', 'Amount', 'Completed', 'Marketing', 'Marketing Email'];
+  const columns = ['Contact', 'State', 'Postal Code', 'Called', 'Estimate Scheduled','Estimate Date', 'Approved Date','Scheduled Date', 'Amount', 'Completed', 'Marketing', 'Marketing Email', "Can't Help Note"];
   const buttonColumns = ['View Estimate', 'View Project'];
 
   function isWithinRange(dateStr) {
@@ -413,6 +417,11 @@ window.buildEstimateTable = function(start, end) {
       marketingEmailCell.style = cellStyle;
       row.appendChild(marketingEmailCell);
 
+      const cantHelpNoteCell = document.createElement('td');
+      cantHelpNoteCell.textContent = entry.cantHelpNote || '';
+      cantHelpNoteCell.style = cellStyle;
+      row.appendChild(cantHelpNoteCell);
+
       // View Estimate Button
       const estimateBtnCell = document.createElement('td');
       estimateBtnCell.style = cellStyle;
@@ -483,7 +492,9 @@ window.downloadExcel = async function () {
         "Amount": entry.amount != null ? `$${entry.amount.toFixed(2)}` : '',
         "Completed": entry.completed || '',
         "Marketing": entry.marketing || entry.companyReferral || '',
-        "Marketing Email": entry.marketingEmail || ''
+        "Marketing Email": entry.marketingEmail || '',
+        "Can't Help Note": entry.cantHelpNote || '',
+        "Can't Help": entry.f_canthelp ? 'Yes' : 'No'
       });
     });
 
